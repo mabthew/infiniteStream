@@ -31,20 +31,28 @@
 
 'use strict';
 
+// websocket stuff
+const webSocketsServerPort = 8000;
+const webSocketServer = require('websocket').server;
+const http = require('http');
 
-const redis = require('redis');
+// Spinning the http server and the websocket server.
+const server = http.createServer();
+server.listen(webSocketsServerPort);
+console.log('listening on port 8000');
 
 
-// create redis client
-let redisClient = redis.createClient();
+const wsServer = new webSocketServer({
+  httpServer: server
+});
 
-// seed corpus
-redisClient.on('connect', function(){
-  console.log('Connected to Redis...');
-  redisClient.FLUSHALL();
-}); 
+wsServer.on('request', function (request) {
+  console.log((new Date()) + ' Recieved a new connection from origin ' + request.origin + '.');
 
-/**
+  // You can rewrite this part of the code to accept only the requests from allowed origin
+  const connection = request.accept(null, request.origin);
+
+  /**
  * Note: Correct microphone settings required: check enclosed link, and make
  * sure the following conditions are met:
  * 1. SoX must be installed and available in your $PATH- it can be found here:
@@ -140,18 +148,12 @@ function infiniteStream(
     
     if (stream.results[0].isFinal) {
       process.stdout.write(chalk.green(`${stdoutText}\n`));
-    //   console.log(stream.results[0].alternatives[0].confidence)
-    //   console.log(stream.results[0].alternatives[0].transcript)
+      console.log(stream.results[0].alternatives[0].confidence)
 
       if (stream.results[0].alternatives[0].confidence > 0.6) {
-        var words = stream.results[0].alternatives[0].transcript.split(" ");
 
-        console.log(words)
-        for (var key in words) {
-          if (words[key] !== '') {
-            redisClient.INCR(words[key]);
-          }
-        }
+        connection.sendUTF(stream.results[0].alternatives[0].transcript)
+
       }
       isFinalEndTime = resultEndTime;
       lastTranscriptWasFinal = true;
@@ -310,3 +312,5 @@ require('yargs')
   .epilogue('For more information, see https://cloud.google.com/speech/docs')
   .help()
   .strict().argv;
+});
+
